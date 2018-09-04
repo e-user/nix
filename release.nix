@@ -127,6 +127,7 @@ let
           meta.description = "Distribution-independent Nix bootstrap binaries for ${system}";
         }
         ''
+          cp ${selinuxPolicy}/nix.pp $TMPDIR/nix.pp
           cp ${installerClosureInfo}/registration $TMPDIR/reginfo
           substitute ${./scripts/install-nix-from-closure.sh} $TMPDIR/install \
             --subst-var-by nix ${toplevel} \
@@ -175,9 +176,10 @@ let
             --transform "s,$TMPDIR/install,$dir/install," \
             --transform "s,$TMPDIR/reginfo,$dir/.reginfo," \
             --transform "s,$NIX_STORE,$dir/store,S" \
+            --transform "s,$TMPDIR/nix.pp,$dir/nix.pp," \
             $TMPDIR/install $TMPDIR/install-darwin-multi-user.sh \
             $TMPDIR/install-systemd-multi-user.sh \
-            $TMPDIR/install-multi-user $TMPDIR/reginfo \
+            $TMPDIR/install-multi-user $TMPDIR/reginfo $TMPDIR/nix.pp \
             $(cat ${installerClosureInfo}/store-paths)
         '');
 
@@ -302,6 +304,15 @@ let
             --replace '@nixVersion@' ${build.x86_64-linux.src.version}
 
           echo "file installer $out/install" >> $out/nix-support/hydra-build-products
+        '';
+
+    selinuxPolicy =
+      pkgs.runCommand "selinux-policy"
+        { buildInputs = with pkgs; [ checkpolicy semodule-utils ]; }
+        ''
+          mkdir -p $out
+          checkmodule -M -m -o $TMPDIR/nix.mod ${./selinux/nix.te}
+          semodule_package -o $out/nix.pp -m $TMPDIR/nix.mod -f ${./selinux/nix.fc}
         '';
 
 
